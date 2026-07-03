@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📍 거주지 지도</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --ink:#33262b; --sub:#8a7680; --line:#eadfe3; --paper:#fdfafb; --card:#ffffff;
+    --rose:#c9527e; --rose-bg:#faeef3; --blue:#3b6fa0; --blue-bg:#e8f0f7;
+    --ok:#2e7d5b; --ok-bg:#e9f4ee; --no:#c24444;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    background:var(--paper); color:var(--ink); line-height:1.6; padding:28px 16px 60px;}
+  .wrap{max-width:860px; margin:0 auto;}
+  header{text-align:center; margin-bottom:22px;}
+  header h1{font-size:24px; font-weight:700; letter-spacing:-0.5px;}
+  header p{color:var(--sub); font-size:13.5px; margin-top:4px;}
+  .privacy{display:inline-block; margin-top:8px; font-size:12px; color:var(--ok);
+    background:var(--ok-bg); padding:4px 12px; border-radius:20px;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:14px;}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .btn{background:var(--rose); color:#fff; border:none; border-radius:10px; padding:9px 16px;
+    font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit;}
+  .btn:hover{background:#b0426c;}
+  .btn.ghost{background:#fff; color:var(--rose); border:1px solid var(--rose);}
+  input[type=file]{font-size:13px;}
+  .status{font-size:13px; margin-top:8px; min-height:18px;}
+  .status.ok{color:var(--ok);} .status.err{color:var(--no);}
+  .filters{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;}
+  .fbtn{font-size:12.5px; font-weight:600; padding:5px 14px; border-radius:20px; cursor:pointer;
+    border:1px solid var(--line); background:#fff; color:var(--sub); font-family:inherit;}
+  .fbtn.on{background:var(--rose); border-color:var(--rose); color:#fff;}
+  #map{width:100%; height:520px; border-radius:12px; border:1px solid var(--line); background:#f4f0f1;}
+  .legend{display:flex; gap:16px; margin-top:10px; font-size:12.5px; color:var(--sub); flex-wrap:wrap;}
+  .legend span{display:flex; align-items:center; gap:6px;}
+  .ldot{width:12px; height:12px; border-radius:50%; display:inline-block;}
+  .pin{border-radius:20px; padding:2px 9px; font-size:12px; font-weight:700; color:#fff;
+    white-space:nowrap; box-shadow:0 1px 4px rgba(0,0,0,0.25); border:2px solid #fff;}
+  .pin.f{background:var(--rose);} .pin.m{background:var(--blue);} .pin.mix{background:#7a5c8f;}
+  .leaflet-popup-content{font-family:inherit; font-size:13px; margin:10px 14px;}
+  .leaflet-popup-content b{font-size:13.5px;}
+  .pp{margin:4px 0; padding:4px 0; border-bottom:1px solid var(--line);}
+  .pp:last-child{border-bottom:none;}
+  .pp .meta{color:var(--sub); font-size:12px;}
+  .unmatched{margin-top:12px; font-size:13px;}
+  .unmatched b{color:var(--no);}
+  .empty{color:var(--sub); font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📍 거주지 지도</h1>
+    <p>프로필DB의 거주지를 지도에 자동 표시합니다 · 매칭계산기와 저장 명단 공유</p>
+    <span class="privacy">🔒 명단은 이 기기 브라우저에만 저장 — 외부 전송 없음</span>
+  </header>
+
+  <div class="card">
+    <div class="row">
+      <input type="file" id="file" accept=".csv,.tsv,.txt">
+      <button class="btn" id="loadBtn">CSV 불러오기</button>
+      <button class="btn ghost" id="sampleBtn">샘플 체험</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card">
+    <div class="filters" id="filters">
+      <button class="fbtn on" data-f="all">전체</button>
+      <button class="fbtn" data-f="여">여성만</button>
+      <button class="fbtn" data-f="남">남성만</button>
+      <button class="fbtn" data-f="active">종료 제외</button>
+    </div>
+    <div id="map"></div>
+    <div class="legend">
+      <span><span class="ldot" style="background:var(--rose)"></span> 여성</span>
+      <span><span class="ldot" style="background:var(--blue)"></span> 남성</span>
+      <span><span class="ldot" style="background:#7a5c8f"></span> 혼합 지역</span>
+      <span>핀을 누르면 해당 지역 인원이 보입니다</span>
+    </div>
+    <div class="unmatched" id="unmatched"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const GEO = {
+  "서울 강남":[37.5172,127.0473],"강남구":[37.5172,127.0473],
+  "강동구":[37.5301,127.1238],"강북구":[37.6396,127.0257],"서울 강서":[37.5509,126.8495],"강서구":[37.5509,126.8495],
+  "관악구":[37.4784,126.9516],"관악":[37.4784,126.9516],"광진구":[37.5385,127.0823],
+  "구로구":[37.4954,126.8874],"구로":[37.4954,126.8874],"금천구":[37.4519,126.9020],
+  "노원구":[37.6542,127.0568],"노원":[37.6542,127.0568],"도봉구":[37.6688,127.0471],
+  "동대문구":[37.5744,127.0396],"동대문":[37.5744,127.0396],"동작구":[37.5124,126.9393],"동작":[37.5124,126.9393],
+  "마포구":[37.5663,126.9019],"마포":[37.5663,126.9019],"서대문":[37.5791,126.9368],
+  "서초구":[37.4837,127.0324],"서초":[37.4837,127.0324],"성동구":[37.5634,127.0369],"성동":[37.5634,127.0369],
+  "성북구":[37.5894,127.0167],"성북":[37.5894,127.0167],"송파구":[37.5145,127.1059],"송파":[37.5145,127.1059],
+  "양천구":[37.5170,126.8664],"양천":[37.5170,126.8664],"영등포":[37.5264,126.8962],
+  "용산구":[37.5324,126.9900],"용산":[37.5324,126.9900],"은평구":[37.6027,126.9291],"은평":[37.6027,126.9291],
+  "종로구":[37.5735,126.9790],"종로":[37.5735,126.9790],"서울 중구":[37.5641,126.9979],"중랑구":[37.6063,127.0925],
+  "판교":[37.3948,127.1112],"분당":[37.3825,127.1189],"성남":[37.4201,127.1262],
+  "수원":[37.2636,127.0286],"안양":[37.3943,126.9568],"부천":[37.5035,126.7660],
+  "일산":[37.6684,126.7770],"고양":[37.6584,126.8320],"수지":[37.3222,127.0977],"용인":[37.2411,127.1776],
+  "안산":[37.3219,126.8309],"의정부":[37.7381,127.0338],"남양주":[37.6360,127.2165],
+  "동탄":[37.2004,127.0964],"화성":[37.1995,126.8315],"평택":[36.9921,127.1129],
+  "시흥":[37.3799,126.8031],"광명":[37.4786,126.8646],"군포":[37.3614,126.9353],
+  "하남":[37.5393,127.2148],"김포":[37.6153,126.7156],"파주":[37.7599,126.7800],
+  "구리":[37.5943,127.1296],"과천":[37.4292,126.9876],"의왕":[37.3447,126.9683],
+  "오산":[37.1499,127.0772],"경기 광주":[37.4295,127.2550],"광주시":[37.4295,127.2550],
+  "이천":[37.2724,127.4350],"양주":[37.7852,127.0459],"동두천":[37.9036,127.0605],
+  "안성":[37.0079,127.2797],"포천":[37.8949,127.2003],"여주":[37.2982,127.6370],
+  "송도":[37.3826,126.6435],"부평":[37.5070,126.7219],"인천":[37.4563,126.7052],
+  "부산":[35.1796,129.0756],"대구":[35.8714,128.6014],"대전":[36.3504,127.3845],
+  "광주광역시":[35.1595,126.8526],"광주":[35.1595,126.8526],
+  "울산":[35.5384,129.3114],"세종":[36.4800,127.2890],
+  "천안":[36.8151,127.1139],"청주":[36.6424,127.4890],"전주":[35.8242,127.1480],
+  "창원":[35.2280,128.6811],"제주":[33.4996,126.5312],"춘천":[37.8813,127.7298],
+  "원주":[37.3422,127.9202],"강릉":[37.7519,128.8761],"포항":[36.0190,129.3435],"김해":[35.2285,128.8894]
+};
+const KEYS = Object.keys(GEO).sort((a,b)=>b.length-a.length);
+
+let people = [], map = null, layer = null, filter = 'all';
+
+const SAMPLE = `이름,코드명,성별,출생연도,키,거주지,직업,상태
+샘플A,🐰래빗94-01,여,1994,165,서울 강남구,마케터,🔵 소개팅 진행중
+샘플B,🦊폭스96-02,남,1996,178,서울 마포구,IT 개발자,🔵 소개팅 진행중
+샘플C,🐻베어92-01,남,1992,182,경기 안양시,금융권,⚪ 대기중
+샘플D,🐧펭귄97-01,여,1997,169,서울 송파구,간호사,💚 성사
+샘플E,🦊폭스95-01,남,1995,169,서울 관악구,공기업,⚪ 대기중
+샘플F,🐻베어93-03,남,1993,164,인천 송도,교사,⚫ 종료`;
+
+function parseDelimited(text){
+  text = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+  const delim = text.split('\n')[0].includes('\t') ? '\t' : ',';
+  const rows = []; let row = []; let cell = ''; let inQ = false;
+  for (let i = 0; i < text.length; i++){
+    const ch = text[i];
+    if (inQ){
+      if (ch === '"'){ if (text[i+1] === '"'){ cell += '"'; i++; } else inQ = false; }
+      else cell += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === delim){ row.push(cell); cell = ''; }
+      else if (ch === '\n'){ row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+  }
+  if (cell !== '' || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+function norm(s){ return (s || '').replace(/\s+/g, '').trim(); }
+
+function buildPeople(rows){
+  const headers = rows[0].map(h => norm(h));
+  const idx = name => headers.indexOf(norm(name));
+  if (idx('거주지') === -1) throw new Error("'거주지' 열이 없습니다.");
+  if (idx('이름') === -1 && idx('코드명') === -1) throw new Error("'이름' 또는 '코드명' 열이 필요합니다.");
+  const get = (r, name) => { const i = idx(name); return i === -1 ? '' : (r[i] || '').trim(); };
+  return rows.slice(1).map(r => ({
+    코드명: get(r, '코드명') || get(r, '이름'),
+    성별: get(r, '성별'), 거주지: get(r, '거주지'),
+    직업: get(r, '직업'), 상태: get(r, '상태'),
+    연도: get(r, '출생연도')
+  })).filter(p => p.코드명);
+}
+
+function geocode(addr){
+  const a = norm(addr);
+  if (!a) return null;
+  for (const k of KEYS){
+    if (a.includes(norm(k))) return { key: k, ll: GEO[k] };
+  }
+  return null;
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function draw(){
+  if (!map) return;
+  if (layer) layer.remove();
+  layer = L.layerGroup().addTo(map);
+  const shown = people.filter(p => {
+    if (filter === '여' || filter === '남') return p.성별 === filter;
+    if (filter === 'active') return !(p.상태 || '').includes('종료');
+    return true;
+  });
+  const groups = {}; const unmatched = [];
+  for (const p of shown){
+    const g = geocode(p.거주지);
+    if (!g){ if (p.거주지) unmatched.push(p); continue; }
+    (groups[g.key] = groups[g.key] || { ll: g.ll, list: [] }).list.push(p);
+  }
+  const bounds = [];
+  for (const key in groups){
+    const g = groups[key];
+    const sexes = new Set(g.list.map(p => p.성별));
+    const cls = sexes.size > 1 ? 'mix' : (sexes.has('여') ? 'f' : 'm');
+    const label = g.list.length === 1 ? g.list[0].코드명 : key + ' ' + g.list.length + '명';
+    const icon = L.divIcon({ className: '', html: '<span class="pin ' + cls + '">' + esc(label) + '</span>', iconAnchor: [30, 12] });
+    const popup = '<b>📍 ' + esc(key) + ' · ' + g.list.length + '명</b>' +
+      g.list.map(p => '<div class="pp"><b>' + esc(p.코드명) + '</b>' +
+        '<div class="meta">' + esc([p.직업, p.연도 ? String(p.연도).slice(2) + '년생' : '', p.상태].filter(Boolean).join(' · ')) + '</div></div>').join('');
+    L.marker(g.ll, { icon }).bindPopup(popup).addTo(layer);
+    bounds.push(g.ll);
+  }
+  if (bounds.length) map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+  const un = document.getElementById('unmatched');
+  un.innerHTML = unmatched.length
+    ? '<b>위치 미확인 ' + unmatched.length + '명:</b> ' +
+      unmatched.map(p => esc(p.코드명) + ' (' + esc(p.거주지) + ')').join(', ') +
+      ' <span style="color:var(--sub)">— 노션 거주지에 시/구 이름을 포함해 주세요 (예: 서울 강남구, 경기 안양시)</span>'
+    : (Object.keys(groups).length ? '' : '<span class="empty">표시할 인원이 없습니다.</span>');
+}
+
+function loadData(text, fromSaved){
+  const st = document.getElementById('status');
+  try{
+    people = buildPeople(parseDelimited(text));
+    if (!people.length) throw new Error('데이터 행이 없습니다.');
+    if (!fromSaved){ try{ localStorage.setItem('matchdata', text); }catch(e){} }
+    st.className = 'status ok';
+    st.textContent = '✅ ' + people.length + '명 불러오기 완료' + (fromSaved ? ' (이 기기에 저장된 명단)' : '');
+    draw();
+  } catch(e){
+    st.className = 'status err';
+    st.textContent = '⚠️ ' + e.message;
+  }
+}
+
+document.getElementById('loadBtn').addEventListener('click', () => {
+  const f = document.getElementById('file').files[0];
+  if (!f){
+    const st = document.getElementById('status');
+    st.className = 'status err';
+    st.textContent = '⚠️ CSV 파일을 선택해 주세요.';
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => loadData(e.target.result);
+  reader.readAsText(f, 'utf-8');
+});
+document.getElementById('sampleBtn').addEventListener('click', () => loadData(SAMPLE));
+document.getElementById('filters').addEventListener('click', e => {
+  const b = e.target.closest('.fbtn');
+  if (!b) return;
+  document.querySelectorAll('.fbtn').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  filter = b.dataset.f;
+  draw();
+});
+
+map = L.map('map').setView([37.5, 127.0], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+(function(){
+  try{
+    const saved = localStorage.getItem('matchdata');
+    if (saved) loadData(saved, true);
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

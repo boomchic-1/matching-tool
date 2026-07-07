@@ -586,7 +586,7 @@ document.getElementById('backupBtn').addEventListener('click', () => {
 function shareText(p){
   const L = [];
   L.push('💌 ' + p.코드명 + '님 프로필');
-  L.push('━━━━━━━━━━━━');
+  L.push('━━━━━━━━━━━━━━━━━━━━━━━━');
   if (p.연도) L.push('🎂 ' + p.연도 + '년생');
   if (p.키 != null) L.push('📏 ' + p.키 + 'cm');
   if (p.거주지) L.push('📍 ' + p.거주지);
@@ -595,7 +595,7 @@ function shareText(p){
   if (life) L.push(life);
   if (p.MBTI) L.push('🧩 ' + p.MBTI);
   if (p.취미) L.push('🎾 ' + p.취미);
-  if (p.한줄소개){ L.push('━━━━━━━━━━━━'); L.push('💬 ' + p.한줄소개); }
+  if (p.한줄소개){ L.push('━━━━━━━━━━━━━━━━━━━━━━━━'); L.push('💬 ' + p.한줄소개); }
   return L.join('\n');
 }
 function selectedShare(){
